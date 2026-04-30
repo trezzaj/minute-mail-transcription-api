@@ -39,7 +39,21 @@ def health():
         "status": "ok",
         "message": "Minute Mail Private Transcription API is running."
     }
+from pydantic import BaseModel
 
+
+class EchoPayload(BaseModel):
+    file_url: str | None = None
+    filename: str | None = None
+
+
+@app.post("/echo")
+def echo(payload: EchoPayload):
+    return {
+        "status": "ok",
+        "received_file_url": payload.file_url,
+        "received_filename": payload.filename
+    }
 @app.post("/transcribe")
 async def transcribe_audio(
     audio_file: UploadFile = File(...),
