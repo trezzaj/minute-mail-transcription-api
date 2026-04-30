@@ -1,8 +1,8 @@
 import os
-import tempfile
-from fastapi import FastAPI, File, UploadFile, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import PlainTextResponse
 from openai import OpenAI
+from pydantic import BaseModel
 
 app = FastAPI(title="Minute Mail Private Transcription API")
 
@@ -33,13 +33,14 @@ The transcript is returned to ChatGPT for draft-only meeting minutes and follow-
 @app.get("/", response_class=PlainTextResponse)
 def root():
     return "Minute Mail Private Transcription API is running."
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "message": "Minute Mail Private Transcription API is running."
     }
-from pydantic import BaseModel
 
 
 class EchoPayload(BaseModel):
@@ -54,49 +55,23 @@ def echo(payload: EchoPayload):
         "received_file_url": payload.file_url,
         "received_filename": payload.filename
     }
+
+
+class TranscribePayload(BaseModel):
+    file_url: str
+    filename: str | None = None
+
+
 @app.post("/transcribe")
 async def transcribe_audio(
-    audio_file: UploadFile = File(...),
+    payload: TranscribePayload,
     x_action_secret: str | None = Header(default=None),
 ):
     if ACTION_SECRET and x_action_secret != ACTION_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    allowed_extensions = (".mp3", ".m4a", ".wav", ".mp4", ".mpeg", ".mpga", ".webm")
-    filename = audio_file.filename or ""
-
-    if not filename.lower().endswith(allowed_extensions):
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported audio format. Please upload mp3, m4a, wav, mp4, mpeg, mpga or webm.",
-        )
-
-    tmp_path = None
-
-    try:
-        suffix = os.path.splitext(filename)[1]
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            contents = await audio_file.read()
-            tmp.write(contents)
-            tmp_path = tmp.name
-
-        with open(tmp_path, "rb") as f:
-            transcription = client.audio.transcriptions.create(
-                model="gpt-4o-transcribe",
-                file=f,
-                response_format="text",
-            )
-
-        return {
-            "transcript": transcription,
-            "language": "To be inferred by GPT from transcript",
-            "confidence_note": "Raw transcript generated from uploaded audio. Speaker diarization not guaranteed."
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
-
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    return {
+        "transcript": "TEST ONLY - transcribeAudio received the file reference successfully.",
+        "language": "test",
+        "confidence_note": f"Received file_url={payload.file_url}, filename={payload.filename}"
+    }
