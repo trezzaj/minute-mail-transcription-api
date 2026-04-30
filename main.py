@@ -1,4 +1,6 @@
 import os
+import tempfile
+import requests
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import PlainTextResponse
 from openai import OpenAI
@@ -63,15 +65,36 @@ class TranscribePayload(BaseModel):
 
 
 @app.post("/transcribe")
-async def transcribe_audio(
-    payload: TranscribePayload,
-    x_action_secret: str | None = Header(default=None),
-):
-    if ACTION_SECRET and x_action_secret != ACTION_SECRET:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+async def transcribe_audio(payload: TranscribePayload):
+    tmp_path = None
 
-    return {
-        "transcript": "TEST ONLY - transcribeAudio received the file reference successfully.",
-        "language": "test",
-        "confidence_note": f"Received file_url={payload.file_url}, filename={payload.filename}"
-    }
+    try:
+        response = requests.get(payload.file_url, timeout=60)
+        response.raise_for_status()
+
+        filename = payload.filename or "audio.mp3"
+        suffix = os.path.splitext(filename)[1] or ".mp3"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(response.content)
+            tmp_path = tmp.name
+
+        with open(tmp_path, "rb") as f:
+            transcription = client.audio.transcriptions.create(
+                model="gpt-4o-transcribe",
+                file=f,
+                response_format="text",
+            )
+
+        return {
+            "transcript": transcription,
+            "language": "To be inferred by GPT from transcript",
+            "confidence_note": "Raw transcript generated from audio URL. Speaker diarization not guaranteed."
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
