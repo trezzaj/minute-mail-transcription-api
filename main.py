@@ -33,7 +33,12 @@ The transcript is returned to ChatGPT for draft-only meeting minutes and follow-
 @app.get("/", response_class=PlainTextResponse)
 def root():
     return "Minute Mail Private Transcription API is running."
-
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "message": "Minute Mail Private Transcription API is running."
+    }
 
 @app.post("/transcribe")
 async def transcribe_audio(
